@@ -41,22 +41,29 @@ def writetimewindows(df_tot,timewindow):
     isFile = os.path.isfile(PATH_TO_DMMSR_DATASET + "/timewindowed.csv")
     if not isFile:
         df_tot['timewindow_nr']=0
+        df_tot['binarization']=0
         df_tot_grouped = df_tot.groupby('name')
         df_result=pd.DataFrame()
+        df_subresult=pd.DataFrame()
         for group_name, df_group in df_tot_grouped:
+            #assing timewindows
             df_group['timewindow_nr'] =np.arange(len(df_group)) // timewindow
-            # last timewindow might be unequal it total/timewindow =/= nat. number!
+
+            # drop last time window if len(DF)%!=0
             if len(df_group)%timewindow !=0:
-                df_group=df_group.drop([df_group['timewindow_nr'].idxmax()])
+                df_group.drop([df_group['timewindow_nr'].idxmax()],inplace=True)
+
+
+
+            #concatinate groups back into 1 DF
             df_result = pd.concat([df_result, df_group], axis=0)
+
         df_tot = df_result
-        df_tot.to_csv(PATH_TO_DMMSR_DATASET + '/timewindowed.csv', index=False)
+        df_result.to_csv(PATH_TO_DMMSR_DATASET + '/timewindowed.csv', index=False)
         print("timewindowed merged file")
     else:
         df_tot = pd.read_csv(PATH_TO_DMMSR_DATASET + '/timewindowed.csv')
     return df_tot
-
-
 
 if __name__ == '__main__':
     df_tot=loadcsv()
@@ -68,7 +75,7 @@ if __name__ == '__main__':
     timewindow=15
     #each file has rows 1 to 44640
     df_tot=writetimewindows(df_tot,timewindow)
-    #df_tot=binarize()
+    # df_tot=binarize(df_tot)
     # df_tot=splitintosets()
 
     pass
