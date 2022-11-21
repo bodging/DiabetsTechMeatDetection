@@ -45,6 +45,7 @@ def writetimewindows(df_tot,timewindow):
         df_tot_grouped = df_tot.groupby('name')
         df_result=pd.DataFrame()
         df_subresult=pd.DataFrame()
+        df_tot_subgrouped=pd.DataFrame()
         for group_name, df_group in df_tot_grouped:
             #assing timewindows
             df_group['timewindow_nr'] =np.arange(len(df_group)) // timewindow
@@ -53,10 +54,14 @@ def writetimewindows(df_tot,timewindow):
             if len(df_group)%timewindow !=0:
                 df_group.drop([df_group['timewindow_nr'].idxmax()],inplace=True)
 
+            df_group_grouped = df_group.groupby('timewindow_nr')
+            for subgroup_name, df_subgroup in df_group_grouped:
+                if max(df_subgroup['sqInsulinNormalBolus'])>0:
+                    df_subgroup['binarization']=1
 
-
+                df_subresult= pd.concat([df_subresult, df_subgroup], axis=0)
             #concatinate groups back into 1 DF
-            df_result = pd.concat([df_result, df_group], axis=0)
+            df_result = pd.concat([df_result, df_subresult], axis=0)
 
         df_tot = df_result
         df_result.to_csv(PATH_TO_DMMSR_DATASET + '/timewindowed.csv', index=False)
