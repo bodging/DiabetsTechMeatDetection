@@ -68,6 +68,20 @@ for i in range(len(X)):
  
  data, labels = split_data(cgm,insulin,15)
  labels = labels.astype(int)
+ 
+ data_train = data[0:int(0.8*len(data))]
+ labels_train = labels[0:int(0.8*len(data))]
+ 
+ data_val = data[int(0.8*len(data)):int(0.9*len(data))]
+ labels_val = labels[int(0.8*len(data)):int(0.9*len(data))]
+ 
+ data_test = data[int(0.9*len(data)):-1]
+ labels_test = labels[int(0.9*len(data)):-1]
+
+ 
+
+
+ 
 
 
 
@@ -76,6 +90,34 @@ n_steps = 15
 n_features = 1
 model = Sequential()
 model.add(LSTM(50, activation='relu', input_shape=(n_steps, n_features)))
+model.add(Dense(1, activation='sigmoid'))
 model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
 #print(model.summary())
 #print("test")
+
+
+model.fit(data_train,labels_train,epochs=100)
+predict = model.predict(data_val)
+
+
+from sklearn.metrics import roc_curve
+
+fpr, tpr,tresholds = roc_curve(labels_val,predict) #fpr = false positive, trp = true positive
+#select threshold from validation set and apply to test set (10% val set, train 70%, rest test)
+
+plt.subplot(1,2,1)
+plt.plot(fpr,tpr)
+plt.title("ROC_curve")
+plt.xlabel("specifity")
+plt.ylabel("sensitivity")
+plt.grid()
+
+from sklearn.metrics import precision_recall_curve
+
+prec,rec,tresholds2 = precision_recall_curve(labels_val,predict)
+plt.subplot(1,2,2)
+plt.plot(rec,prec)
+plt.title("precision-recall")
+plt.xlabel("Recall")
+plt.ylabel("Precision")
+plt.grid()
