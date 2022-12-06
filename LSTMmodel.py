@@ -6,7 +6,7 @@ Created on Sun Dec  4 10:12:37 2022
 """
 
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import LSTM, Dense
+from tensorflow.keras.layers import LSTM, Dense, Dropout
 from numpy import array
 import os
 import torch as th
@@ -66,7 +66,9 @@ for i in range(len(X)):
  time = file["minutesPastSimStart"].to_numpy()
  cgm = file["cgm"].to_numpy()
  
- data, labels = split_data(cgm,insulin,15)
+ series_length = 30
+ 
+ data, labels = split_data(cgm,insulin,series_length)
  labels = labels.astype(int)
  
  data_train = data[0:int(0.8*len(data))]
@@ -80,16 +82,12 @@ for i in range(len(X)):
 
  
 
-
- 
-
-
-
 #model
-n_steps = 15
+n_steps = series_length
 n_features = 1
 model = Sequential()
-model.add(LSTM(50, activation='relu', input_shape=(n_steps, n_features)))
+model.add(LSTM(100, activation='relu', input_shape=(n_steps, n_features)))
+model.add(Dense(units=128,activation='relu'))
 model.add(Dense(1, activation='sigmoid'))
 model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
 #print(model.summary())
@@ -121,3 +119,31 @@ plt.title("precision-recall")
 plt.xlabel("Recall")
 plt.ylabel("Precision")
 plt.grid()
+
+from sklearn.metrics import accuracy_score
+
+
+opt_index = np.argmax(tpr-fpr)
+opt_treshold = tresholds[opt_index]
+
+opt_index2 = np.argmin(abs(prec-rec))
+
+opt_treshold2 = tresholds2[opt_index2]
+print('optimal teshold is:', opt_treshold)
+
+from sklearn.metrics import accuracy_score
+
+predict_tresh = (predict>=opt_treshold).astype(int)
+predict_tresh2 = (predict>=opt_treshold).astype(int)
+
+
+acc = accuracy_score(labels_val,predict_tresh)
+acc2 = accuracy_score(labels_val,predict_tresh2)
+
+spec_tresh = fpr[opt_index]
+sens_tresh = tpr[opt_index]
+prec_tresh = prec[opt_index2]
+rec_tresh = rec[opt_index2]
+
+print('accuracy=', acc, 'specifity=',spec_tresh,' sensitivty=',sens_tresh)
+print('precision =', prec_tresh, ' recall =', rec_tresh)
