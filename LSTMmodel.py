@@ -13,6 +13,7 @@ import torch as th
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
+import tensorflow as tf
 
 # split a univariate sequence into samples
 def split_sequence(sequence, n_steps):
@@ -52,6 +53,8 @@ n_steps = 3
 # split into samples
 lenght = 3
 
+    
+
 
 X, y = split_sequence(raw_seq, n_steps)
 y = y.astype(int)
@@ -66,10 +69,17 @@ for i in range(len(X)):
  time = file["minutesPastSimStart"].to_numpy()
  cgm = file["cgm"].to_numpy()
  
- series_length = 30
+ series_length = 15
  
  data, labels = split_data(cgm,insulin,series_length)
  labels = labels.astype(int)
+ 
+ for row in range(0,len(data)):
+     mue = np.mean(data[row])
+     sigma = np.std(data[row])
+     data[row] = (data[row]-mue)/sigma
+     
+
  
  data_train = data[0:int(0.8*len(data))]
  labels_train = labels[0:int(0.8*len(data))]
@@ -79,6 +89,8 @@ for i in range(len(X)):
  
  data_test = data[int(0.9*len(data)):-1]
  labels_test = labels[int(0.9*len(data)):-1]
+ 
+ #normalization
 
  
 
@@ -86,16 +98,31 @@ for i in range(len(X)):
 n_steps = series_length
 n_features = 1
 model = Sequential()
-model.add(LSTM(100, activation='relu', input_shape=(n_steps, n_features)))
+model.add(LSTM(25, activation='relu', input_shape=(n_steps, n_features)))
 model.add(Dense(units=128,activation='relu'))
 model.add(Dense(1, activation='sigmoid'))
 model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
 #print(model.summary())
 #print("test")
 
+from imblearn.keras import BalancedBatchGenerator
+from imblearn.under_sampling import NearMiss
+training_generator = BalancedBatchGenerator(
+    data_train, labels_train, sampler=NearMiss(), batch_size=10)
 
-model.fit(data_train,labels_train,epochs=100)
+
+
+model.fit(data_train,labels_train,epochs=2000)
 predict = model.predict(data_val)
+
+# from sklearn.metrics import accuracy_score,precision_score,recall_score
+# from imblearn.metrics import specificity_score
+
+
+# acc = accuracy_score(labels_val,predict)
+# precision = precision_score(labels_val,predict_labels)
+# recall = recall_score(labels_val,predict)
+# spec = specificity_score(labels_val, predict)
 
 
 from sklearn.metrics import roc_curve
@@ -120,30 +147,6 @@ plt.xlabel("Recall")
 plt.ylabel("Precision")
 plt.grid()
 
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import accuracy_score,precision_score,recall_score
+#DICE and housedorf etc...
 
-
-opt_index = np.argmax(tpr-fpr)
-opt_treshold = tresholds[opt_index]
-
-opt_index2 = np.argmin(abs(prec-rec))
-
-opt_treshold2 = tresholds2[opt_index2]
-print('optimal teshold is:', opt_treshold)
-
-from sklearn.metrics import accuracy_score
-
-predict_tresh = (predict>=opt_treshold).astype(int)
-predict_tresh2 = (predict>=opt_treshold).astype(int)
-
-
-acc = accuracy_score(labels_val,predict_tresh)
-acc2 = accuracy_score(labels_val,predict_tresh2)
-
-spec_tresh = fpr[opt_index]
-sens_tresh = tpr[opt_index]
-prec_tresh = prec[opt_index2]
-rec_tresh = rec[opt_index2]
-
-print('accuracy=', acc, 'specifity=',spec_tresh,' sensitivty=',sens_tresh)
-print('precision =', prec_tresh, ' recall =', rec_tresh)
