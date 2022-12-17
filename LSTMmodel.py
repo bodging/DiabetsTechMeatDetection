@@ -15,80 +15,77 @@ import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
 
-# split a univariate sequence into samples
-def split_sequence(sequence, n_steps):
- X = list()
- y = []
- for i in range(0,len(sequence)):
- # find the end of this pattern
-     end_ix = i + n_steps
- # check if we are beyond the sequence
-     if end_ix > len(sequence)-1:
-        break
- # gather input and output parts of the pattern
-     seq_x = sequence[i:end_ix]
-     X.append(seq_x)
-     y.append(any(seq_x!=0))
- return array(X), array(y)
+
+from keras import backend as K
+
+def recall_m(y_true, y_pred):
+    true_positives = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
+    possible_positives = K.sum(K.round(K.clip(y_true, 0, 1)))
+    recall = true_positives / (possible_positives + K.epsilon())
+    return recall
+
+def precision_m(y_true, y_pred):
+    true_positives = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
+    predicted_positives = K.sum(K.round(K.clip(y_pred, 0, 1)))
+    precision = true_positives / (predicted_positives + K.epsilon())
+    return precision
+
+def f1_m(y_true, y_pred):
+    precision = precision_m(y_true, y_pred)
+    recall = recall_m(y_true, y_pred)
+    return 2*((precision*recall)/(precision+recall+K.epsilon()))
+
+
 
 def split_data(cgm,insulin, n_steps):
  data  = []
  labels = []
- for i in range(0,len(cgm)):
+ for i in range(0,len(cgm)-100):
  # find the end of this pattern
      end_ix = i + n_steps
  # check if we are beyond the sequence
      if end_ix > len(cgm)-1:
         break
  # gather input and output parts of the pattern
-     seq_x = cgm[i:end_ix]
+     offset = 15
+     i_off = i+offset
+     end_ix_off = end_ix+offset
+ 
+     seq_x = cgm[i_off:end_ix_off]
      data.append(seq_x)
-     seq_y = any(insulin[i:end_ix]!=0)
+     seq_y = any(insulin[i:end_ix]!=0) #to detect a jump in insulin
      labels.append(seq_y)
  return array(data), array(labels)
 
-raw_seq = np.array([10, 20, 30, 40, 50, 60, 70, 80, 90])
-# choose a number of time steps
-n_steps = 3
-# split into samples
-lenght = 3
-
-    
-
-
-X, y = split_sequence(raw_seq, n_steps)
-y = y.astype(int)
-# summarize the data
-for i in range(len(X)):
- print(X[i], y[i])
  
  # read data
- dir = "C:/Users/vince/OneDrive/Unibe/Semester_3/diabetes management/project/DMMSR_Dataset/DMMSR_Dataset/adolecents"
- file = pd.read_csv(os.path.join(dir, "adolescent#001.csv"))
- insulin = file["sqInsulinNormalBolus"].to_numpy()
- time = file["minutesPastSimStart"].to_numpy()
- cgm = file["cgm"].to_numpy()
+dir = "C:/Users/vince/OneDrive/Unibe/Semester_3/diabetes management/project/DMMSR_Dataset/DMMSR_Dataset/children"
+file = pd.read_csv(os.path.join(dir, "child#006.csv"))
+insulin = file["sqInsulinNormalBolus"].to_numpy()
+time = file["minutesPastSimStart"].to_numpy()
+cgm = file["cgm"].to_numpy()
+cho = file["CR"].to_numpy()
  
- series_length = 15
+series_length = 30
  
- data, labels = split_data(cgm,insulin,series_length)
- labels = labels.astype(int)
+data, labels = split_data(cgm,insulin,series_length)
+labels = labels.astype(int)
  
- for row in range(0,len(data)):
-     mue = np.mean(data[row])
-     sigma = np.std(data[row])
-     data[row] = (data[row]-mue)/sigma
+for row in range(0,len(data)):
+    mue = np.mean(data[row])
+    sigma = np.std(data[row])
+    data[row] = (data[row]-mue)/sigma
      
 
  
- data_train = data[0:int(0.8*len(data))]
- labels_train = labels[0:int(0.8*len(data))]
+data_train = data[0:int(0.8*len(data))]
+labels_train = labels[0:int(0.8*len(data))]
  
- data_val = data[int(0.8*len(data)):int(0.9*len(data))]
- labels_val = labels[int(0.8*len(data)):int(0.9*len(data))]
+data_val = data[int(0.8*len(data)):int(0.9*len(data))]
+labels_val = labels[int(0.8*len(data)):int(0.9*len(data))]
  
- data_test = data[int(0.9*len(data)):-1]
- labels_test = labels[int(0.9*len(data)):-1]
+data_test = data[int(0.9*len(data)):-1]
+labels_test = labels[int(0.9*len(data)):-1]
  
  #normalization
 
@@ -100,29 +97,28 @@ n_features = 1
 model = Sequential()
 model.add(LSTM(25, activation='relu', input_shape=(n_steps, n_features)))
 model.add(Dense(units=128,activation='relu'))
+#model.add(Dense(1, activation='sigmoid'))
 model.add(Dense(1, activation='sigmoid'))
-model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+
+#model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['acc',f1_m,precision_m, recall_m])
 #print(model.summary())
 #print("test")
 
-from imblearn.keras import BalancedBatchGenerator
-from imblearn.under_sampling import NearMiss
-training_generator = BalancedBatchGenerator(
-    data_train, labels_train, sampler=NearMiss(), batch_size=10)
+
+from imblearn.over_sampling import SMOTE
+#sm = SMOTE(random_state=0)
+sm = SMOTE( sampling_strategy=1, random_state=None, k_neighbors=5, n_jobs=None)
+x_resampled, y_resampled = sm.fit_resample(data_train, labels_train)
 
 
 
-model.fit(data_train,labels_train,epochs=2000)
+model.fit(x_resampled,y_resampled,batch_size=16, epochs=20)
+#model.fit(x_resampled,y_resampled, epochs=100)
+
 predict = model.predict(data_val)
 
-# from sklearn.metrics import accuracy_score,precision_score,recall_score
-# from imblearn.metrics import specificity_score
 
-
-# acc = accuracy_score(labels_val,predict)
-# precision = precision_score(labels_val,predict_labels)
-# recall = recall_score(labels_val,predict)
-# spec = specificity_score(labels_val, predict)
 
 
 from sklearn.metrics import roc_curve
@@ -147,6 +143,49 @@ plt.xlabel("Recall")
 plt.ylabel("Precision")
 plt.grid()
 
-from sklearn.metrics import accuracy_score,precision_score,recall_score
-#DICE and housedorf etc...
+from sklearn.metrics import roc_auc_score
+from sklearn.metrics import average_precision_score
+
+
+ROC_area = roc_auc_score(labels_val,predict)
+
+avg_prec = average_precision_score(labels_val,predict)
+print('area under ROC:', ROC_area, 'average precision:', avg_prec)
+
+#chosing good tresholds:
+#tresholds were true positive - false positive is maximal
+opt_index = np.argmax(tpr-fpr)
+opt_treshold = tresholds[opt_index]
+
+opt_index2 = np.argmin(abs(prec-rec))
+
+opt_treshold2 = tresholds2[opt_index2]
+print('optimal teshold is:', opt_treshold)
+
+from sklearn.metrics import accuracy_score
+
+predict_tresh = (predict>=opt_treshold)
+predict_tresh2 = (predict>=opt_treshold2)
+
+acc = accuracy_score(labels_val,predict_tresh2)
+
+spec_tresh = 1-fpr[opt_index]
+sens_tresh = tpr[opt_index]
+prec_tresh = prec[opt_index2]
+rec_tresh = rec[opt_index2]
+
+print('accuracy=', acc, 'specifity=',spec_tresh,' sensitivty=',sens_tresh)
+print('precision =', prec_tresh, ' recall =', rec_tresh)
+
+predict_bin = predict_tresh2
+labels_val = labels_val.reshape(predict_bin.shape)
+diff=(abs(predict_bin-labels_val))
+1-np.sum(diff)/len(diff)
+
+
+
+
+        
+
+
 
